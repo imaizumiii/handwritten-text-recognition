@@ -1,8 +1,10 @@
 import { Text } from '@react-three/drei'
 import Neuron from './Neuron'
 
-// App.tsx でネットワーク全体をセンタリングするために export
 export const LAYER_SPACING = 3.5
+// NeuralNetwork.tsx がエッジ座標を計算するときに同じ式を使えるよう export
+export const MAX_LAYER_HEIGHT = 5.0
+export const MAX_NEURON_SPACING = 1.2
 
 interface NetworkLayerProps {
   layerIndex: number       // X軸位置の計算に使用
@@ -12,7 +14,6 @@ interface NetworkLayerProps {
 }
 
 const NEURON_RADIUS = 0.25
-const MAX_LAYER_HEIGHT = 5.0  // ニューロン数が多くても縦幅をこの範囲に収める
 
 function NetworkLayer({ layerIndex, neuronCount, activations, label }: NetworkLayerProps) {
   // ニューロン間隔: 数が増えるほど詰める（上限 1.2）
