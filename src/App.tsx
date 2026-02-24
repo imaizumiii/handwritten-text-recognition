@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import NeuralNetwork, { type NetworkConfig } from './components/NeuralNetwork'
+import DrawingCanvas, { type DrawingCanvasHandle } from './components/DrawingCanvas'
 
 const config: NetworkConfig = {
   layers: [16, 10, 8, 4],
@@ -76,6 +77,7 @@ function App() {
   const [runId, setRunId] = useState(0)
   const [phase, setPhase] = useState(-1)
   const [numLayers, setNumLayers] = useState(config.layers.length)
+  const canvasRef = useRef<DrawingCanvasHandle>(null)
 
   const handlePhaseChange = useCallback((p: number, n: number) => {
     setPhase(p)
@@ -92,14 +94,20 @@ function App() {
           height: '100%',
           background: '#0a0a2a',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          gap: '1rem',
           color: '#ccd6ff',
           fontSize: '1.1rem',
           letterSpacing: '0.05em',
         }}
       >
-        Drawing Pad
+        <span>Drawing Pad</span>
+        <DrawingCanvas ref={canvasRef} onDraw={() => {}} />
+        <button style={buttonStyle} onClick={() => canvasRef.current?.clear()}>
+          Clear
+        </button>
       </div>
 
       {/* 右パネル */}
