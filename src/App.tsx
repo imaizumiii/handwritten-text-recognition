@@ -1,10 +1,8 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import * as THREE from 'three'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import NeuralNetwork, { type NetworkConfig } from './components/NeuralNetwork'
-import CameraAnimator from './components/CameraAnimator'
 
 const config: NetworkConfig = {
   layers: [16, 10, 8, 4],
@@ -19,6 +17,15 @@ function DynamicLight({ active }: { active: boolean }) {
     ref.current.intensity += (target - ref.current.intensity) * delta * 3
   })
   return <ambientLight ref={ref} intensity={0.35} />
+}
+
+function FixedCamera() {
+  const { camera } = useThree()
+  useEffect(() => {
+    camera.position.set(-8, 6, 10)
+    camera.lookAt(0, 0, 0)
+  }, [camera])
+  return null
 }
 
 interface SceneProps {
@@ -37,10 +44,9 @@ function Scene({ runId, phase, numLayers, onPhaseChange }: SceneProps) {
       <pointLight position={[10, 10, 10]} intensity={80} />
       <pointLight position={[-10, -5, 8]} intensity={30} color="#4466ff" />
 
+      <FixedCamera />
       <NeuralNetwork config={config} animRunId={runId} onPhaseChange={onPhaseChange} />
 
-      <CameraAnimator phase={phase} numLayers={numLayers} />
-      <OrbitControls enableDamping dampingFactor={0.08} />
 
       <EffectComposer multisampling={0}>
         <Bloom
@@ -78,7 +84,7 @@ function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-      <Canvas camera={{ position: [0, 0, 14], fov: 60 }}>
+      <Canvas camera={{ position: [-6, 4.5, 10], fov: 60 }}>
         <color attach="background" args={['#050510']} />
         <fog attach="fog" args={['#050510', 25, 55]} />
         <Scene

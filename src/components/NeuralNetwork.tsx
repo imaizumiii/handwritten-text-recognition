@@ -10,6 +10,11 @@ const MAX_NEURON_SPACING = 1.2
 
 const MAX_DISPLAY_NEURONS = 16
 
+// 入力層グリッド設定
+const INPUT_GRID_SIZE = 16          // 16×16
+const INPUT_GRID_SPACING = 0.35     // グリッド間隔
+const INPUT_NEURON_RADIUS = 0.1     // 入力層の小さいニューロン
+
 // 層ペアあたりのエッジ上限
 const MAX_EDGES_PER_PAIR = 60
 
@@ -76,11 +81,30 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
     [layers],
   )
 
-  // 全ニューロンの位置と activation をフラット配列に集約（InstancedMesh 用）
-  const { neuronPositions, neuronActivations } = useMemo(() => {
+  // 入力層（16×16 グリッド）のニューロン位置と activation
+  const { inputPositions, inputActivations } = useMemo(() => {
     const positions: [number, number, number][] = []
     const activations: number[] = []
-    for (let i = 0; i < layerData.length; i++) {
+    const x = 0 // 入力層の X 位置
+    const totalSpan = (INPUT_GRID_SIZE - 1) * INPUT_GRID_SPACING
+    const offset = totalSpan / 2
+    for (let row = 0; row < INPUT_GRID_SIZE; row++) {
+      for (let col = 0; col < INPUT_GRID_SIZE; col++) {
+        const y = offset - row * INPUT_GRID_SPACING
+        const z = -offset + col * INPUT_GRID_SPACING
+        positions.push([x, y, z])
+        activations.push(Math.random())
+      }
+    }
+    return { inputPositions: positions, inputActivations: activations }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layers])
+
+  // 隠れ層・出力層のニューロン位置と activation（入力層以外）
+  const { hiddenPositions, hiddenActivations } = useMemo(() => {
+    const positions: [number, number, number][] = []
+    const activations: number[] = []
+    for (let i = 1; i < layerData.length; i++) {
       const x = i * LAYER_SPACING
       const ys = calcYPositions(layerData[i].displayCount)
       for (let j = 0; j < layerData[i].displayCount; j++) {
@@ -88,25 +112,36 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
         activations.push(layerData[i].activations[j])
       }
     }
-    return { neuronPositions: positions, neuronActivations: activations }
+    return { hiddenPositions: positions, hiddenActivations: activations }
   }, [layerData])
 
   // ラベル用のデータ
-  const labels = useMemo(
-    () =>
-      layerData.map((layer, i) => {
-        const spacing =
-          layer.displayCount > 1
-            ? Math.min(MAX_NEURON_SPACING, MAX_LAYER_HEIGHT / (layer.displayCount - 1))
-            : 0
-        const totalHeight = (layer.displayCount - 1) * spacing
-        return {
-          text: layerLabel(i, numLayers, layer.size),
-          position: [i * LAYER_SPACING, -(totalHeight / 2) - 0.65, 0] as [number, number, number],
-        }
-      }),
-    [layerData, numLayers],
-  )
+  const labels = useMemo(() => {
+    const result: { text: string; position: [number, number, number] }[] = []
+
+    // 入力層ラベル: グリッド下端の下
+    const inputGridSpan = (INPUT_GRID_SIZE - 1) * INPUT_GRID_SPACING
+    result.push({
+      text: `Input (${INPUT_GRID_SIZE}×${INPUT_GRID_SIZE})`,
+      position: [0, -(inputGridSpan / 2) - 0.65, 0],
+    })
+
+    // 隠れ層・出力層ラベル
+    for (let i = 1; i < layerData.length; i++) {
+      const layer = layerData[i]
+      const spacing =
+        layer.displayCount > 1
+          ? Math.min(MAX_NEURON_SPACING, MAX_LAYER_HEIGHT / (layer.displayCount - 1))
+          : 0
+      const totalHeight = (layer.displayCount - 1) * spacing
+      result.push({
+        text: layerLabel(i, numLayers, layer.size),
+        position: [i * LAYER_SPACING, -(totalHeight / 2) - 0.65, 0],
+      })
+    }
+
+    return result
+  }, [layerData, numLayers])
 
   // エッジデータ
   const edges = useMemo<EdgeData[]>(() => {
@@ -213,8 +248,13 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
       <EdgeBatch edges={edges} />
 
       <NeuronInstances
-        positions={neuronPositions}
-        activations={neuronActivations}
+        positions={inputPositions}
+        activations={inputActivations}
+        radius={INPUT_NEURON_RADIUS}
+      />
+      <NeuronInstances
+        positions={hiddenPositions}
+        activations={hiddenActivations}
       />
 
       {labels.map((l, i) => (
