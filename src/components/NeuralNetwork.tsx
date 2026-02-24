@@ -15,8 +15,12 @@ const INPUT_GRID_SIZE = 16          // 16×16
 const INPUT_GRID_SPACING = 0.35     // グリッド間隔
 const INPUT_NEURON_RADIUS = 0.1     // 入力層の小さいニューロン
 
-// 層ペアあたりのエッジ上限
+// 層ペアあたりのエッジ上限（隠れ層同士）
 const MAX_EDGES_PER_PAIR = 60
+
+// 入力層→隠れ層1 のエッジ上限
+const MAX_INPUT_EDGES = 250
+const INPUT_EDGE_OPACITY = 0.18
 
 // 1層遷移あたりに表示するパーティクルの上限
 const MAX_PARTICLES_PER_PAIR = 8
@@ -40,6 +44,7 @@ interface EdgeData {
   start: [number, number, number]
   end: [number, number, number]
   weight: number
+  opacity?: number
 }
 
 function calcYPositions(count: number): number[] {
@@ -147,7 +152,39 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
   const edges = useMemo<EdgeData[]>(() => {
     const result: EdgeData[] = []
 
-    for (let l = 0; l < numLayers - 1; l++) {
+    // --- 入力層 (l=0) → 隠れ層1: グリッド座標を使用し weight 上位に間引き ---
+    {
+      const countB = layerData[1].displayCount
+      const xB = 1 * LAYER_SPACING
+      const yB = calcYPositions(countB)
+      const countA = inputPositions.length // 256
+      const totalPossible = countA * countB
+      const rand = seededRandom(0 * 9973 + 1)
+
+      // 全候補に weight を振って上位を選ぶ
+      const candidates: { i: number; j: number; weight: number }[] = []
+      for (let i = 0; i < countA; i++) {
+        for (let j = 0; j < countB; j++) {
+          candidates.push({ i, j, weight: rand() * 2 - 1 })
+        }
+      }
+      candidates.sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight))
+      const selected = candidates.slice(0, MAX_INPUT_EDGES)
+
+      for (const { i, j, weight } of selected) {
+        result.push({
+          key: `0-${i}-${j}`,
+          layerPair: 0,
+          start: inputPositions[i],
+          end: [xB, yB[j], 0],
+          weight,
+          opacity: INPUT_EDGE_OPACITY,
+        })
+      }
+    }
+
+    // --- 隠れ層同士・隠れ層→出力層 (l>=1): 既存ロジック ---
+    for (let l = 1; l < numLayers - 1; l++) {
       const countA = layerData[l].displayCount
       const countB = layerData[l + 1].displayCount
       const xA = l * LAYER_SPACING
@@ -191,7 +228,7 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
       }
     }
     return result
-  }, [layerData, numLayers])
+  }, [layerData, numLayers, inputPositions])
 
   // パーティクルデータ（ParticleSystem 用にフラット化）
   const flatParticles = useMemo<ParticleData[]>(() => {
