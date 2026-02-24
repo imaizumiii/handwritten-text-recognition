@@ -1,18 +1,56 @@
-import { useState } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { useState, useCallback, useRef } from 'react'
+import * as THREE from 'three'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import NeuralNetwork, { type NetworkConfig } from './components/NeuralNetwork'
+import CameraAnimator from './components/CameraAnimator'
 
 const config: NetworkConfig = {
   layers: [16, 10, 8, 4],
 }
 
-function Scene({ runId }: { runId: number }) {
+/** アニメーション中にシーン全体を少し明るくする動的アンビエントライト */
+function DynamicLight({ active }: { active: boolean }) {
+  const ref = useRef<THREE.AmbientLight>(null!)
+  useFrame((_, delta) => {
+    if (!ref.current) return
+    const target = active ? 0.9 : 0.35
+    ref.current.intensity += (target - ref.current.intensity) * delta * 3
+  })
+  return <ambientLight ref={ref} intensity={0.35} />
+}
+
+interface SceneProps {
+  runId: number
+  phase: number
+  numLayers: number
+  onPhaseChange: (phase: number, numLayers: number) => void
+}
+
+function Scene({ runId, phase, numLayers, onPhaseChange }: SceneProps) {
+  const isActive = phase >= 0
+
   return (
     <>
-      <ambientLight intensity={0.5} />
-      <pointLight position={[10, 10, 10]} intensity={100} />
-      <NeuralNetwork config={config} animRunId={runId} />
+      <DynamicLight active={isActive} />
+      <pointLight position={[10, 10, 10]} intensity={80} />
+      <pointLight position={[-10, -5, 8]} intensity={30} color="#4466ff" />
+
+      <NeuralNetwork config={config} animRunId={runId} onPhaseChange={onPhaseChange} />
+
+      <CameraAnimator phase={phase} numLayers={numLayers} />
+      <OrbitControls enableDamping dampingFactor={0.08} />
+
+      <EffectComposer multisampling={0}>
+        <Bloom
+          intensity={0.8}
+          luminanceThreshold={0.3}
+          luminanceSmoothing={0.7}
+          mipmapBlur
+          levels={3}
+        />
+      </EffectComposer>
     </>
   )
 }
@@ -30,13 +68,25 @@ const buttonStyle: React.CSSProperties = {
 
 function App() {
   const [runId, setRunId] = useState(0)
+  const [phase, setPhase] = useState(-1)
+  const [numLayers, setNumLayers] = useState(config.layers.length)
+
+  const handlePhaseChange = useCallback((p: number, n: number) => {
+    setPhase(p)
+    setNumLayers(n)
+  }, [])
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-      <Canvas camera={{ position: [0, 0, 12], fov: 60 }}>
-        <color attach="background" args={['#0a0a1a']} />
-        <Scene runId={runId} />
-        <OrbitControls />
+      <Canvas camera={{ position: [0, 0, 14], fov: 60 }}>
+        <color attach="background" args={['#050510']} />
+        <fog attach="fog" args={['#050510', 25, 55]} />
+        <Scene
+          runId={runId}
+          phase={phase}
+          numLayers={numLayers}
+          onPhaseChange={handlePhaseChange}
+        />
       </Canvas>
 
       <div

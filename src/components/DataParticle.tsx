@@ -11,8 +11,8 @@ interface DataParticleProps {
   color: string
 }
 
-const TRAIL_COUNT = 4      // 残像の数
-const TRAIL_SPACING = 0.07 // progress がこの値進むたびに座標を記録
+const TRAIL_COUNT = 2      // 残像の数（パフォーマンスのため削減）
+const TRAIL_SPACING = 0.10 // progress がこの値進むたびに座標を記録
 
 function DataParticle({
   startPos,

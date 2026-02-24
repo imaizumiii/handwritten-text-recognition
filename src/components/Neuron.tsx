@@ -35,7 +35,7 @@ function Neuron({ position, activation, radius = 0.3 }: NeuronProps) {
       onPointerOver={() => { isHovered.current = true }}
       onPointerOut={() => { isHovered.current = false }}
     >
-      <sphereGeometry args={[radius, 32, 32]} />
+      <sphereGeometry args={[radius, 16, 12]} />
       <meshStandardMaterial
         color={color}
         emissive={color}
