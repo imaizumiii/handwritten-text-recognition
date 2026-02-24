@@ -83,29 +83,50 @@ function App() {
   }, [])
 
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-      <Canvas camera={{ position: [-6, 4.5, 10], fov: 60 }}>
-        <color attach="background" args={['#050510']} />
-        <fog attach="fog" args={['#050510', 25, 55]} />
-        <Scene
-          runId={runId}
-          phase={phase}
-          numLayers={numLayers}
-          onPhaseChange={handlePhaseChange}
-        />
-      </Canvas>
-
+    <div style={{ display: 'flex', width: '100vw', height: '100vh' }}>
+      {/* 左パネル */}
       <div
         style={{
-          position: 'absolute',
-          bottom: '2rem',
-          left: '50%',
-          transform: 'translateX(-50%)',
+          width: 600,
+          minWidth: 600,
+          height: '100%',
+          background: '#0a0a2a',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#ccd6ff',
+          fontSize: '1.1rem',
+          letterSpacing: '0.05em',
         }}
       >
-        <button style={buttonStyle} onClick={() => setRunId(id => id + 1)}>
-          Run
-        </button>
+        Drawing Pad
+      </div>
+
+      {/* 右パネル */}
+      <div style={{ flex: 1, height: '100%', position: 'relative' }}>
+        <Canvas camera={{ position: [-6, 4.5, 10], fov: 60 }}>
+          <color attach="background" args={['#050510']} />
+          <fog attach="fog" args={['#050510', 25, 55]} />
+          <Scene
+            runId={runId}
+            phase={phase}
+            numLayers={numLayers}
+            onPhaseChange={handlePhaseChange}
+          />
+        </Canvas>
+
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '2rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+          }}
+        >
+          <button style={buttonStyle} onClick={() => setRunId(id => id + 1)}>
+            Run
+          </button>
+        </div>
       </div>
     </div>
   )
