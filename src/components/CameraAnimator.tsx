@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { LAYER_SPACING } from './NetworkLayer'
+import { LAYER_SPACING } from './NeuralNetwork'
 
 interface CameraAnimatorProps {
   phase: number      // -1 = idle, 0..numLayers-2 = active layer pair

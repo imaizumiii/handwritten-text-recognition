@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import NetworkLayer, {
-  LAYER_SPACING,
-  MAX_LAYER_HEIGHT,
-  MAX_NEURON_SPACING,
-} from './NetworkLayer'
+import { Text } from '@react-three/drei'
 import { EdgeBatch } from './Edge'
-import DataParticle from './DataParticle'
+import NeuronInstances from './NeuronInstances'
+import ParticleSystem, { type ParticleData } from './ParticleSystem'
+
+export const LAYER_SPACING = 3.5
+const MAX_LAYER_HEIGHT = 5.0
+const MAX_NEURON_SPACING = 1.2
 
 const MAX_DISPLAY_NEURONS = 16
 
-// 層ペアあたりのエッジ上限（全組み合わせではなくサンプリング）
+// 層ペアあたりのエッジ上限
 const MAX_EDGES_PER_PAIR = 60
 
 // 1層遷移あたりに表示するパーティクルの上限
@@ -24,7 +25,7 @@ export interface NetworkConfig {
 
 interface NeuralNetworkProps {
   config: NetworkConfig
-  animRunId: number  // インクリメントするたびにアニメーション再生
+  animRunId: number
   onPhaseChange?: (phase: number, numLayers: number) => void
 }
 
@@ -49,7 +50,6 @@ function layerLabel(index: number, total: number, actualSize: number): string {
   return `Hidden ${index} (${actualSize})`
 }
 
-/** 擬似乱数（seed ベース）で再現性を保つ */
 function seededRandom(seed: number) {
   let s = seed
   return () => {
@@ -73,10 +73,42 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
         return { size, displayCount, activations }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [layers]
+    [layers],
   )
 
-  // エッジデータ: 層ペアあたり MAX_EDGES_PER_PAIR 本にサンプリング
+  // 全ニューロンの位置と activation をフラット配列に集約（InstancedMesh 用）
+  const { neuronPositions, neuronActivations } = useMemo(() => {
+    const positions: [number, number, number][] = []
+    const activations: number[] = []
+    for (let i = 0; i < layerData.length; i++) {
+      const x = i * LAYER_SPACING
+      const ys = calcYPositions(layerData[i].displayCount)
+      for (let j = 0; j < layerData[i].displayCount; j++) {
+        positions.push([x, ys[j], 0])
+        activations.push(layerData[i].activations[j])
+      }
+    }
+    return { neuronPositions: positions, neuronActivations: activations }
+  }, [layerData])
+
+  // ラベル用のデータ
+  const labels = useMemo(
+    () =>
+      layerData.map((layer, i) => {
+        const spacing =
+          layer.displayCount > 1
+            ? Math.min(MAX_NEURON_SPACING, MAX_LAYER_HEIGHT / (layer.displayCount - 1))
+            : 0
+        const totalHeight = (layer.displayCount - 1) * spacing
+        return {
+          text: layerLabel(i, numLayers, layer.size),
+          position: [i * LAYER_SPACING, -(totalHeight / 2) - 0.65, 0] as [number, number, number],
+        }
+      }),
+    [layerData, numLayers],
+  )
+
+  // エッジデータ
   const edges = useMemo<EdgeData[]>(() => {
     const result: EdgeData[] = []
 
@@ -92,7 +124,6 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
       const rand = seededRandom(l * 9973 + 1)
 
       if (totalPossible <= MAX_EDGES_PER_PAIR) {
-        // 全組み合わせが上限以下ならそのまま生成
         for (let i = 0; i < countA; i++) {
           for (let j = 0; j < countB; j++) {
             const weight = rand() * 2 - 1
@@ -106,7 +137,6 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
           }
         }
       } else {
-        // サンプリング: ランダムに MAX_EDGES_PER_PAIR 本選ぶ
         const sampled = new Set<number>()
         while (sampled.size < MAX_EDGES_PER_PAIR) {
           sampled.add(Math.floor(rand() * totalPossible))
@@ -128,18 +158,25 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
     return result
   }, [layerData, numLayers])
 
-  // 各層間について |weight| 上位をパーティクルに使用
-  const particlesByPair = useMemo<EdgeData[][]>(
-    () =>
-      Array.from({ length: numLayers - 1 }, (_, l) =>
-        edges
-          .filter(e => e.layerPair === l)
-          .sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight))
-          .slice(0, MAX_PARTICLES_PER_PAIR),
-      ),
-    [edges, numLayers],
-  )
+  // パーティクルデータ（ParticleSystem 用にフラット化）
+  const flatParticles = useMemo<ParticleData[]>(() => {
+    const byPair = Array.from({ length: numLayers - 1 }, (_, l) =>
+      edges
+        .filter(e => e.layerPair === l)
+        .sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight))
+        .slice(0, MAX_PARTICLES_PER_PAIR),
+    )
+    return byPair.flatMap((group, pairIdx) =>
+      group.map(e => ({
+        startPos: e.start,
+        endPos: e.end,
+        color: e.weight >= 0 ? '#4a90e2' : '#e05252',
+        layerPair: pairIdx,
+      })),
+    )
+  }, [edges, numLayers])
 
+  // アニメーションタイマー
   useEffect(() => {
     if (animRunId === 0) return
 
@@ -164,7 +201,9 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
     )
     timeoutsRef.current.push(endT)
 
-    return () => { timeoutsRef.current.forEach(clearTimeout) }
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout)
+    }
   }, [animRunId, numLayers, onPhaseChange])
 
   const centerOffset = -((numLayers - 1) * LAYER_SPACING) / 2
@@ -173,28 +212,29 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
     <group position={[centerOffset, 0, 0]}>
       <EdgeBatch edges={edges} />
 
-      {layerData.map((layer, i) => (
-        <NetworkLayer
+      <NeuronInstances
+        positions={neuronPositions}
+        activations={neuronActivations}
+      />
+
+      {labels.map((l, i) => (
+        <Text
           key={i}
-          layerIndex={i}
-          neuronCount={layer.displayCount}
-          activations={layer.activations}
-          label={layerLabel(i, numLayers, layer.size)}
-        />
+          position={l.position}
+          fontSize={0.28}
+          color="#888888"
+          anchorX="center"
+          anchorY="top"
+        >
+          {l.text}
+        </Text>
       ))}
 
-      {particlesByPair.map((particles, pairIdx) =>
-        particles.map((p, particleIdx) => (
-          <DataParticle
-            key={`${animRunId}-${pairIdx}-${particleIdx}`}
-            startPos={p.start}
-            endPos={p.end}
-            speed={1.8}
-            active={activeLayerPair === pairIdx}
-            color={p.weight >= 0 ? '#4a90e2' : '#e05252'}
-          />
-        )),
-      )}
+      <ParticleSystem
+        particles={flatParticles}
+        activeLayerPair={activeLayerPair}
+        animRunId={animRunId}
+      />
     </group>
   )
 }

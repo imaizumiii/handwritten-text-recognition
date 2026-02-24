@@ -48,7 +48,7 @@ function Scene({ runId, phase, numLayers, onPhaseChange }: SceneProps) {
           luminanceThreshold={0.3}
           luminanceSmoothing={0.7}
           mipmapBlur
-          levels={3}
+          levels={1}
         />
       </EffectComposer>
     </>
