@@ -62,17 +62,6 @@ function Scene({ runId, phase, numLayers, onPhaseChange }: SceneProps) {
   )
 }
 
-const buttonStyle: React.CSSProperties = {
-  padding: '0.6rem 2.4rem',
-  fontSize: '1rem',
-  background: '#12124a',
-  color: '#ccd6ff',
-  border: '1px solid #4a4aaa',
-  borderRadius: '6px',
-  cursor: 'pointer',
-  letterSpacing: '0.05em',
-}
-
 function App() {
   const [runId, setRunId] = useState(0)
   const [phase, setPhase] = useState(-1)
@@ -82,6 +71,10 @@ function App() {
   const handlePhaseChange = useCallback((p: number, n: number) => {
     setPhase(p)
     setNumLayers(n)
+  }, [])
+
+  const handleRun = useCallback(() => {
+    setRunId(id => id + 1)
   }, [])
 
   return (
@@ -97,13 +90,14 @@ function App() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          overflowY: 'auto',
         }}
       >
-        <InputPanel onImageReady={setMnistData} />
+        <InputPanel onImageReady={setMnistData} onRun={handleRun} />
       </div>
 
       {/* 右パネル */}
-      <div style={{ flex: 1, height: '100%', position: 'relative' }}>
+      <div style={{ flex: 1, height: '100%' }}>
         <Canvas camera={{ position: [-6, 4.5, 10], fov: 60 }}>
           <color attach="background" args={['#050510']} />
           <fog attach="fog" args={['#050510', 25, 55]} />
@@ -114,19 +108,6 @@ function App() {
             onPhaseChange={handlePhaseChange}
           />
         </Canvas>
-
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '2rem',
-            left: '50%',
-            transform: 'translateX(-50%)',
-          }}
-        >
-          <button style={buttonStyle} onClick={() => setRunId(id => id + 1)}>
-            Run
-          </button>
-        </div>
       </div>
     </div>
   )

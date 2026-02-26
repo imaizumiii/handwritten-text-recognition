@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 
 export interface DrawingCanvasHandle {
   clear: () => void
@@ -8,6 +8,7 @@ export interface DrawingCanvasHandle {
 interface DrawingCanvasProps {
   displaySize?: number
   onDraw: (imageData: ImageData) => void
+  onDrawStart?: () => void
 }
 
 const INTERNAL_SIZE = 28
@@ -25,10 +26,12 @@ function initCtx(ctx: CanvasRenderingContext2D) {
 }
 
 const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
-  function DrawingCanvas({ displaySize = 280, onDraw }, ref) {
+  function DrawingCanvas({ displaySize = 280, onDraw, onDrawStart }, ref) {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
     const isDrawing = useRef(false)
+    const lastPos = useRef<{ x: number; y: number } | null>(null)
+    const [isEmpty, setIsEmpty] = useState(true)
 
     useEffect(() => {
       const canvas = canvasRef.current
@@ -44,6 +47,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
         const ctx = ctxRef.current
         if (!ctx) return
         initCtx(ctx)
+        setIsEmpty(true)
       },
       getImageData: () => {
         const ctx = ctxRef.current
@@ -64,23 +68,33 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       const ctx = ctxRef.current
       if (!ctx) return
       isDrawing.current = true
-      const { x, y } = getPos(clientX, clientY)
+      const pos = getPos(clientX, clientY)
+      lastPos.current = pos
       ctx.beginPath()
-      ctx.moveTo(x, y)
-    }, [])
+      ctx.moveTo(pos.x, pos.y)
+      if (isEmpty) {
+        setIsEmpty(false)
+        onDrawStart?.()
+      }
+    }, [isEmpty, onDrawStart])
 
     const draw = useCallback((clientX: number, clientY: number) => {
       if (!isDrawing.current) return
       const ctx = ctxRef.current
       if (!ctx) return
-      const { x, y } = getPos(clientX, clientY)
-      ctx.lineTo(x, y)
+      const pos = getPos(clientX, clientY)
+      const prev = lastPos.current!
+      const midX = (prev.x + pos.x) / 2
+      const midY = (prev.y + pos.y) / 2
+      ctx.quadraticCurveTo(prev.x, prev.y, midX, midY)
       ctx.stroke()
+      lastPos.current = pos
     }, [])
 
     const endDrawing = useCallback(() => {
       if (!isDrawing.current) return
       isDrawing.current = false
+      lastPos.current = null
       const ctx = ctxRef.current
       if (!ctx) return
       ctx.closePath()
@@ -113,27 +127,45 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
     }, [endDrawing])
 
     return (
-      <canvas
-        ref={canvasRef}
-        width={INTERNAL_SIZE}
-        height={INTERNAL_SIZE}
-        style={{
-          width: displaySize,
-          height: displaySize,
-          borderRadius: 8,
-          border: '1px solid #2a2a6a',
-          cursor: 'crosshair',
-          touchAction: 'none',
-          imageRendering: 'pixelated',
-        }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={endDrawing}
-        onMouseLeave={endDrawing}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      />
+      <div style={{ position: 'relative', width: displaySize, height: displaySize }}>
+        <canvas
+          ref={canvasRef}
+          width={INTERNAL_SIZE}
+          height={INTERNAL_SIZE}
+          style={{
+            width: displaySize,
+            height: displaySize,
+            borderRadius: 8,
+            border: '1px solid #2a2a6a',
+            cursor: 'crosshair',
+            touchAction: 'none',
+            imageRendering: 'pixelated',
+          }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={endDrawing}
+          onMouseLeave={endDrawing}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        />
+        {isEmpty && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#4a4a8a',
+              fontSize: 14,
+              pointerEvents: 'none',
+            }}
+          >
+            0〜9 を描いてください
+          </div>
+        )}
+      </div>
     )
   },
 )
