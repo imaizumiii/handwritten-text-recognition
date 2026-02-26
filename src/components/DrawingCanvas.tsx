@@ -2,21 +2,18 @@ import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 
 
 export interface DrawingCanvasHandle {
   clear: () => void
-  undo: () => void
-  canUndo: boolean
   getImageData: () => ImageData | null
 }
 
 interface DrawingCanvasProps {
   displaySize?: number
-  onDraw: (imageData: ImageData, historyLength: number) => void
+  onDraw: (imageData: ImageData) => void
 }
 
 const INTERNAL_SIZE = 28
 const BG_COLOR = '#0d0d30'
 const STROKE_COLOR = '#ffffff'
 const LINE_WIDTH = 1.5
-const MAX_HISTORY = 20
 
 function initCtx(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = BG_COLOR
@@ -32,7 +29,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
     const isDrawing = useRef(false)
-    const historyRef = useRef<ImageData[]>([])
 
     useEffect(() => {
       const canvas = canvasRef.current
@@ -43,45 +39,18 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       initCtx(ctx)
     }, [])
 
-    const pushHistory = useCallback(() => {
-      const ctx = ctxRef.current
-      if (!ctx) return
-      const snapshot = ctx.getImageData(0, 0, INTERNAL_SIZE, INTERNAL_SIZE)
-      const history = historyRef.current
-      if (history.length >= MAX_HISTORY) {
-        history.shift()
-      }
-      history.push(snapshot)
-    }, [])
-
     useImperativeHandle(ref, () => ({
       clear: () => {
         const ctx = ctxRef.current
         if (!ctx) return
         initCtx(ctx)
-        historyRef.current = []
-      },
-      undo: () => {
-        const ctx = ctxRef.current
-        if (!ctx) return
-        const history = historyRef.current
-        if (history.length === 0) return
-        const snapshot = history.pop()!
-        ctx.putImageData(snapshot, 0, 0)
-        onDraw(
-          ctx.getImageData(0, 0, INTERNAL_SIZE, INTERNAL_SIZE),
-          history.length,
-        )
-      },
-      get canUndo() {
-        return historyRef.current.length > 0
       },
       getImageData: () => {
         const ctx = ctxRef.current
         if (!ctx) return null
         return ctx.getImageData(0, 0, INTERNAL_SIZE, INTERNAL_SIZE)
       },
-    }), [onDraw])
+    }), [])
 
     const getPos = (clientX: number, clientY: number) => {
       const rect = canvasRef.current!.getBoundingClientRect()
@@ -94,12 +63,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
     const startDrawing = useCallback((clientX: number, clientY: number) => {
       const ctx = ctxRef.current
       if (!ctx) return
-      pushHistory()
       isDrawing.current = true
       const { x, y } = getPos(clientX, clientY)
       ctx.beginPath()
       ctx.moveTo(x, y)
-    }, [pushHistory])
+    }, [])
 
     const draw = useCallback((clientX: number, clientY: number) => {
       if (!isDrawing.current) return
@@ -116,10 +84,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       const ctx = ctxRef.current
       if (!ctx) return
       ctx.closePath()
-      onDraw(
-        ctx.getImageData(0, 0, INTERNAL_SIZE, INTERNAL_SIZE),
-        historyRef.current.length,
-      )
+      onDraw(ctx.getImageData(0, 0, INTERNAL_SIZE, INTERNAL_SIZE))
     }, [onDraw])
 
     const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
