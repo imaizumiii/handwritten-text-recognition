@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import NeuralNetwork, { type NetworkConfig } from './components/NeuralNetwork'
-import DrawingCanvas, { type DrawingCanvasHandle } from './components/DrawingCanvas'
+import InputPanel from './components/InputPanel'
 
 const config: NetworkConfig = {
   layers: [16, 10, 8, 4],
@@ -77,7 +77,7 @@ function App() {
   const [runId, setRunId] = useState(0)
   const [phase, setPhase] = useState(-1)
   const [numLayers, setNumLayers] = useState(config.layers.length)
-  const canvasRef = useRef<DrawingCanvasHandle>(null)
+  const [mnistData, setMnistData] = useState<number[] | null>(null)
 
   const handlePhaseChange = useCallback((p: number, n: number) => {
     setPhase(p)
@@ -97,17 +97,9 @@ function App() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '1rem',
-          color: '#ccd6ff',
-          fontSize: '1.1rem',
-          letterSpacing: '0.05em',
         }}
       >
-        <span>Drawing Pad</span>
-        <DrawingCanvas ref={canvasRef} onDraw={() => {}} />
-        <button style={buttonStyle} onClick={() => canvasRef.current?.clear()}>
-          Clear
-        </button>
+        <InputPanel onImageReady={setMnistData} />
       </div>
 
       {/* 右パネル */}
