@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import DrawingCanvas, { type DrawingCanvasHandle } from './DrawingCanvas'
 import { imageDataToMNIST } from '../utils/imageProcessing'
 
@@ -23,9 +23,11 @@ const disabledButtonStyle: React.CSSProperties = {
 
 export default function InputPanel({ onImageReady }: InputPanelProps) {
   const canvasRef = useRef<DrawingCanvasHandle>(null)
+  const [canUndo, setCanUndo] = useState(false)
 
   const handleDraw = useCallback(
-    (imageData: ImageData) => {
+    (imageData: ImageData, historyLength: number) => {
+      setCanUndo(historyLength > 0)
       const mnistData = imageDataToMNIST(imageData)
       onImageReady(mnistData)
     },
@@ -34,6 +36,11 @@ export default function InputPanel({ onImageReady }: InputPanelProps) {
 
   const handleClear = useCallback(() => {
     canvasRef.current?.clear()
+    setCanUndo(false)
+  }, [])
+
+  const handleUndo = useCallback(() => {
+    canvasRef.current?.undo()
   }, [])
 
   return (
@@ -55,7 +62,11 @@ export default function InputPanel({ onImageReady }: InputPanelProps) {
         <button style={buttonStyle} onClick={handleClear}>
           Clear
         </button>
-        <button style={disabledButtonStyle} disabled>
+        <button
+          style={canUndo ? buttonStyle : disabledButtonStyle}
+          disabled={!canUndo}
+          onClick={handleUndo}
+        >
           Undo
         </button>
       </div>
