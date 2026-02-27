@@ -36,7 +36,7 @@ interface SceneProps {
   onPhaseChange: (phase: number, numLayers: number) => void
 }
 
-function Scene({ runId, phase, numLayers, onPhaseChange }: SceneProps) {
+function Scene({ runId, phase, numLayers: _numLayers, onPhaseChange }: SceneProps) {
   const isActive = phase >= 0
 
   return (
@@ -66,7 +66,7 @@ function App() {
   const [runId, setRunId] = useState(0)
   const [phase, setPhase] = useState(-1)
   const [numLayers, setNumLayers] = useState(config.layers.length)
-  const [mnistData, setMnistData] = useState<number[] | null>(null)
+  const [_mnistData, setMnistData] = useState<number[] | null>(null)
 
   const handlePhaseChange = useCallback((p: number, n: number) => {
     setPhase(p)

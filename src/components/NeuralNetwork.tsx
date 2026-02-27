@@ -158,7 +158,6 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
       const xB = 1 * LAYER_SPACING
       const yB = calcYPositions(countB)
       const countA = inputPositions.length // 256
-      const totalPossible = countA * countB
       const rand = seededRandom(0 * 9973 + 1)
 
       // 全候補に weight を振って上位を選ぶ
