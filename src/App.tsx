@@ -4,6 +4,8 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import NeuralNetwork, { type NetworkConfig } from './components/NeuralNetwork'
 import InputPanel from './components/InputPanel'
+import { loadMNISTModel } from './utils/modelLoader'
+import { runInference, type LayerActivation } from './utils/inference'
 
 const config: NetworkConfig = {
   layers: [784, 128, 64, 10],
@@ -33,10 +35,11 @@ interface SceneProps {
   runId: number
   phase: number
   numLayers: number
+  activations: LayerActivation[] | undefined
   onPhaseChange: (phase: number, numLayers: number) => void
 }
 
-function Scene({ runId, phase, numLayers: _numLayers, onPhaseChange }: SceneProps) {
+function Scene({ runId, phase, numLayers: _numLayers, activations, onPhaseChange }: SceneProps) {
   const isActive = phase >= 0
 
   return (
@@ -46,8 +49,12 @@ function Scene({ runId, phase, numLayers: _numLayers, onPhaseChange }: SceneProp
       <pointLight position={[-10, -5, 8]} intensity={30} color="#4466ff" />
 
       <FixedCamera />
-      <NeuralNetwork config={config} animRunId={runId} onPhaseChange={onPhaseChange} />
-
+      <NeuralNetwork
+        config={config}
+        animRunId={runId}
+        activations={activations}
+        onPhaseChange={onPhaseChange}
+      />
 
       <EffectComposer multisampling={0}>
         <Bloom
@@ -66,7 +73,8 @@ function App() {
   const [runId, setRunId] = useState(0)
   const [phase, setPhase] = useState(-1)
   const [numLayers, setNumLayers] = useState(config.layers.length)
-  const [_mnistData, setMnistData] = useState<number[] | null>(null)
+  const [mnistData, setMnistData] = useState<number[] | null>(null)
+  const [inferenceActivations, setInferenceActivations] = useState<LayerActivation[] | undefined>(undefined)
 
   const handlePhaseChange = useCallback((p: number, n: number) => {
     setPhase(p)
@@ -74,8 +82,21 @@ function App() {
   }, [])
 
   const handleRun = useCallback(() => {
+    // アニメーションを即時開始
     setRunId(id => id + 1)
-  }, [])
+
+    // mnistData があれば推論を実行し、アクティベーションを更新する
+    if (mnistData) {
+      loadMNISTModel()
+        .then(model => {
+          const result = runInference(model, mnistData)
+          setInferenceActivations(result.activations)
+        })
+        .catch(err => {
+          console.error('[App] 推論エラー:', err)
+        })
+    }
+  }, [mnistData])
 
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh' }}>
@@ -105,6 +126,7 @@ function App() {
             runId={runId}
             phase={phase}
             numLayers={numLayers}
+            activations={inferenceActivations}
             onPhaseChange={handlePhaseChange}
           />
         </Canvas>

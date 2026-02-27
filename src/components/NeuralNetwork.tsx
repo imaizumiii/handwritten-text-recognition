@@ -3,6 +3,7 @@ import { Text } from '@react-three/drei'
 import { EdgeBatch } from './Edge'
 import NeuronInstances from './NeuronInstances'
 import ParticleSystem, { type ParticleData } from './ParticleSystem'
+import type { LayerActivation } from '../utils/inference'
 
 export const LAYER_SPACING = 3.5
 const MAX_LAYER_HEIGHT = 5.0
@@ -35,6 +36,7 @@ export interface NetworkConfig {
 interface NeuralNetworkProps {
   config: NetworkConfig
   animRunId: number
+  activations?: LayerActivation[]  // 推論結果（undefined ならダミー値を使用）
   onPhaseChange?: (phase: number, numLayers: number) => void
 }
 
@@ -68,29 +70,55 @@ function seededRandom(seed: number) {
   }
 }
 
-function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps) {
+/**
+ * ReLU 出力など上限のない値を [0, 1] に正規化する。
+ * 層内の最大値で割ることで相対的な強度を保つ。
+ */
+function normalizeLayer(values: number[]): number[] {
+  const max = Math.max(...values)
+  return max > 0 ? values.map(v => v / max) : values.map(() => 0)
+}
+
+/**
+ * values から displayCount 個を等間隔でサンプリングする。
+ * values.length <= displayCount の場合はそのまま返す。
+ */
+function sampleValues(values: number[], displayCount: number): number[] {
+  if (values.length <= displayCount) return values
+  const step = values.length / displayCount
+  return Array.from({ length: displayCount }, (_, i) => values[Math.floor(i * step)])
+}
+
+function NeuralNetwork({ config, animRunId, activations: activationsProp, onPhaseChange }: NeuralNetworkProps) {
   const { layers } = config
   const numLayers = layers.length
 
   const [activeLayerPair, setActiveLayerPair] = useState(-1)
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
+  // 隠れ層・出力層（layers[1] 以降）のデータ
   const layerData = useMemo(
     () =>
-      layers.map(size => {
+      layers.map((size, i) => {
         const displayCount = Math.min(size, MAX_DISPLAY_NEURONS)
-        const activations = Array.from({ length: displayCount }, () => Math.random())
-        return { size, displayCount, activations }
+        let acts: number[]
+        if (activationsProp && activationsProp[i]) {
+          // 実アクティベーション: 正規化してから表示数にサンプリング
+          const norm = normalizeLayer(activationsProp[i].values)
+          acts = sampleValues(norm, displayCount)
+        } else {
+          acts = Array.from({ length: displayCount }, () => Math.random())
+        }
+        return { size, displayCount, activations: acts }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [layers],
+    [layers, activationsProp],
   )
 
-  // 入力層（16×16 グリッド）のニューロン位置と activation
+  // 入力層（28×28 グリッド）のニューロン位置と activation
   const { inputPositions, inputActivations } = useMemo(() => {
     const positions: [number, number, number][] = []
-    const activations: number[] = []
-    const x = 0 // 入力層の X 位置
+    const x = 0
     const totalSpan = (INPUT_GRID_SIZE - 1) * INPUT_GRID_SPACING
     const offset = totalSpan / 2
     for (let row = 0; row < INPUT_GRID_SIZE; row++) {
@@ -98,26 +126,31 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
         const y = offset - row * INPUT_GRID_SPACING
         const z = -offset + col * INPUT_GRID_SPACING
         positions.push([x, y, z])
-        activations.push(Math.random())
       }
     }
-    return { inputPositions: positions, inputActivations: activations }
+
+    // 実アクティベーションがあればそのまま使用（MNIST データは既に [0,1]）
+    // ない場合はダミー乱数
+    const acts = activationsProp?.[0]?.values ??
+      Array.from({ length: INPUT_GRID_SIZE * INPUT_GRID_SIZE }, () => Math.random())
+
+    return { inputPositions: positions, inputActivations: acts }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layers])
+  }, [layers, activationsProp])
 
   // 隠れ層・出力層のニューロン位置と activation（入力層以外）
   const { hiddenPositions, hiddenActivations } = useMemo(() => {
     const positions: [number, number, number][] = []
-    const activations: number[] = []
+    const acts: number[] = []
     for (let i = 1; i < layerData.length; i++) {
       const x = i * LAYER_SPACING
       const ys = calcYPositions(layerData[i].displayCount)
       for (let j = 0; j < layerData[i].displayCount; j++) {
         positions.push([x, ys[j], 0])
-        activations.push(layerData[i].activations[j])
+        acts.push(layerData[i].activations[j])
       }
     }
-    return { hiddenPositions: positions, hiddenActivations: activations }
+    return { hiddenPositions: positions, hiddenActivations: acts }
   }, [layerData])
 
   // ラベル用のデータ
@@ -157,7 +190,7 @@ function NeuralNetwork({ config, animRunId, onPhaseChange }: NeuralNetworkProps)
       const countB = layerData[1].displayCount
       const xB = 1 * LAYER_SPACING
       const yB = calcYPositions(countB)
-      const countA = inputPositions.length // 256
+      const countA = inputPositions.length // 784
       const rand = seededRandom(0 * 9973 + 1)
 
       // 全候補に weight を振って上位を選ぶ
