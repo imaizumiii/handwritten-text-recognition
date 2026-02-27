@@ -1,17 +1,22 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import type { LayersModel } from '@tensorflow/tfjs'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import NeuralNetwork, { type NetworkConfig } from './components/NeuralNetwork'
 import InputPanel from './components/InputPanel'
-import { loadMNISTModel } from './utils/modelLoader'
-import { runInference, type LayerActivation } from './utils/inference'
+import PredictionDisplay from './components/PredictionDisplay'
+import { loadMNISTModel, type ModelStatus } from './utils/modelLoader'
+import { runInference, type InferenceResult } from './utils/inference'
 
 const config: NetworkConfig = {
   layers: [784, 128, 64, 10],
 }
 
-/** アニメーション中にシーン全体を少し明るくする動的アンビエントライト */
+// -----------------------------------------------------------------------
+// Three.js helpers（Canvas 内でのみ使用）
+// -----------------------------------------------------------------------
+
 function DynamicLight({ active }: { active: boolean }) {
   const ref = useRef<THREE.AmbientLight>(null!)
   useFrame((_, delta) => {
@@ -35,68 +40,156 @@ interface SceneProps {
   runId: number
   phase: number
   numLayers: number
-  activations: LayerActivation[] | undefined
+  inferenceResult: InferenceResult | null
   onPhaseChange: (phase: number, numLayers: number) => void
 }
 
-function Scene({ runId, phase, numLayers: _numLayers, activations, onPhaseChange }: SceneProps) {
+function Scene({ runId, phase, numLayers: _numLayers, inferenceResult, onPhaseChange }: SceneProps) {
   const isActive = phase >= 0
-
   return (
     <>
       <DynamicLight active={isActive} />
       <pointLight position={[10, 10, 10]} intensity={80} />
       <pointLight position={[-10, -5, 8]} intensity={30} color="#4466ff" />
-
       <FixedCamera />
       <NeuralNetwork
         config={config}
         animRunId={runId}
-        activations={activations}
+        activations={inferenceResult?.activations}
         onPhaseChange={onPhaseChange}
       />
-
       <EffectComposer multisampling={0}>
-        <Bloom
-          intensity={0.8}
-          luminanceThreshold={0.3}
-          luminanceSmoothing={0.7}
-          mipmapBlur
-          levels={1}
-        />
+        <Bloom intensity={0.8} luminanceThreshold={0.3} luminanceSmoothing={0.7} mipmapBlur levels={1} />
       </EffectComposer>
     </>
   )
 }
 
+// -----------------------------------------------------------------------
+// ModelStatusIndicator
+// -----------------------------------------------------------------------
+
+const retryBtnStyle: React.CSSProperties = {
+  padding: '2px 10px',
+  fontSize: 12,
+  background: 'transparent',
+  color: '#e05252',
+  border: '1px solid #e05252',
+  borderRadius: 4,
+  cursor: 'pointer',
+}
+
+function ModelStatusIndicator({
+  status,
+  onRetry,
+}: {
+  status: ModelStatus
+  onRetry: () => void
+}) {
+  // 'ready' になったら 3 秒後に非表示にする
+  const [readyVisible, setReadyVisible] = useState(false)
+
+  useEffect(() => {
+    if (status !== 'ready') return
+    setReadyVisible(true)
+    const t = setTimeout(() => setReadyVisible(false), 3000)
+    return () => clearTimeout(t)
+  }, [status])
+
+  if (status === 'idle') return null
+
+  if (status === 'loading') {
+    return (
+      <div style={{ marginTop: 10, fontSize: 13, color: '#8888cc' }}>
+        モデルを読み込み中...
+      </div>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <div style={{ marginTop: 10, fontSize: 13, color: '#e05252', display: 'flex', alignItems: 'center', gap: 8 }}>
+        モデルの読み込みに失敗しました
+        <button style={retryBtnStyle} onClick={onRetry}>再試行</button>
+      </div>
+    )
+  }
+
+  // status === 'ready'
+  if (!readyVisible) return null
+  return (
+    <div style={{ marginTop: 10, fontSize: 13, color: '#44cc66' }}>
+      ● モデル準備完了
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------
+// App
+// -----------------------------------------------------------------------
+
 function App() {
-  const [runId, setRunId] = useState(0)
-  const [phase, setPhase] = useState(-1)
+  const [runId, setRunId]         = useState(0)
+  const [phase, setPhase]         = useState(-1)
   const [numLayers, setNumLayers] = useState(config.layers.length)
   const [mnistData, setMnistData] = useState<number[] | null>(null)
-  const [inferenceActivations, setInferenceActivations] = useState<LayerActivation[] | undefined>(undefined)
+  const [isRunning, setIsRunning] = useState(false)
+
+  const [modelStatus, setModelStatus]         = useState<ModelStatus>('idle')
+  const [inferenceResult, setInferenceResult] = useState<InferenceResult | null>(null)
+
+  const modelRef = useRef<LayersModel | null>(null)
+
+  // モデルロード処理（起動時 + retry 時に呼ぶ）
+  const startModelLoad = useCallback(() => {
+    setModelStatus('loading')
+    loadMNISTModel()
+      .then(model => {
+        modelRef.current = model
+        setModelStatus('ready')
+      })
+      .catch(() => {
+        setModelStatus('error')
+      })
+  }, [])
+
+  // アプリ起動時にバックグラウンドロード開始
+  useEffect(() => {
+    startModelLoad()
+  }, [startModelLoad])
 
   const handlePhaseChange = useCallback((p: number, n: number) => {
     setPhase(p)
     setNumLayers(n)
   }, [])
 
-  const handleRun = useCallback(() => {
-    // アニメーションを即時開始
-    setRunId(id => id + 1)
+  // キャンバスをクリアしたら mnistData も null に戻す
+  const handleClear = useCallback(() => {
+    setMnistData(null)
+    setInferenceResult(null)
+  }, [])
 
-    // mnistData があれば推論を実行し、アクティベーションを更新する
-    if (mnistData) {
-      loadMNISTModel()
-        .then(model => {
-          const result = runInference(model, mnistData)
-          setInferenceActivations(result.activations)
-        })
-        .catch(err => {
-          console.error('[App] 推論エラー:', err)
-        })
+  const handleRun = useCallback(() => {
+    if (!mnistData || !modelRef.current || modelStatus !== 'ready' || isRunning) return
+
+    setIsRunning(true)
+    try {
+      const t0 = performance.now()
+      const result = runInference(modelRef.current, mnistData)
+      const ms = (performance.now() - t0).toFixed(1)
+      console.debug(`[App] 推論完了: ${ms}ms  予測=${result.prediction}  確信度=${(result.probabilities[result.prediction] * 100).toFixed(1)}%`)
+
+      setInferenceResult(result)
+      setRunId(id => id + 1)
+    } catch (err) {
+      console.error('[App] 推論エラー:', err)
+    } finally {
+      setIsRunning(false)
     }
-  }, [mnistData])
+  }, [mnistData, modelStatus, isRunning])
+
+  // Run ボタンを有効にする条件
+  const canRun = modelStatus === 'ready' && mnistData !== null && !isRunning
 
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh' }}>
@@ -114,7 +207,14 @@ function App() {
           overflowY: 'auto',
         }}
       >
-        <InputPanel onImageReady={setMnistData} onRun={handleRun} />
+        <InputPanel
+          onImageReady={setMnistData}
+          onRun={handleRun}
+          onClear={handleClear}
+          canRun={canRun}
+        />
+        <ModelStatusIndicator status={modelStatus} onRetry={startModelLoad} />
+        <PredictionDisplay result={inferenceResult} />
       </div>
 
       {/* 右パネル */}
@@ -126,7 +226,7 @@ function App() {
             runId={runId}
             phase={phase}
             numLayers={numLayers}
-            activations={inferenceActivations}
+            inferenceResult={inferenceResult}
             onPhaseChange={handlePhaseChange}
           />
         </Canvas>
