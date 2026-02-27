@@ -6,7 +6,7 @@ import NeuralNetwork, { type NetworkConfig } from './components/NeuralNetwork'
 import InputPanel from './components/InputPanel'
 
 const config: NetworkConfig = {
-  layers: [16, 10, 8, 4],
+  layers: [784, 128, 64, 10],
 }
 
 /** アニメーション中にシーン全体を少し明るくする動的アンビエントライト */
@@ -23,7 +23,7 @@ function DynamicLight({ active }: { active: boolean }) {
 function FixedCamera() {
   const { camera } = useThree()
   useEffect(() => {
-    camera.position.set(-8, 6, 10)
+    camera.position.set(-8, 6, 12)
     camera.lookAt(0, 0, 0)
   }, [camera])
   return null
@@ -98,7 +98,7 @@ function App() {
 
       {/* 右パネル */}
       <div style={{ flex: 1, height: '100%' }}>
-        <Canvas camera={{ position: [-6, 4.5, 10], fov: 60 }}>
+        <Canvas camera={{ position: [-8, 6, 12], fov: 60 }}>
           <color attach="background" args={['#050510']} />
           <fog attach="fog" args={['#050510', 25, 55]} />
           <Scene

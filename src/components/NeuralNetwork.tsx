@@ -11,15 +11,15 @@ const MAX_NEURON_SPACING = 1.2
 const MAX_DISPLAY_NEURONS = 16
 
 // 入力層グリッド設定
-const INPUT_GRID_SIZE = 16          // 16×16
-const INPUT_GRID_SPACING = 0.35     // グリッド間隔
-const INPUT_NEURON_RADIUS = 0.1     // 入力層の小さいニューロン
+const INPUT_GRID_SIZE = 28          // 28×28（MNIST 解像度）
+const INPUT_GRID_SPACING = 0.20     // グリッド間隔（27×0.20=5.40 単位、視覚サイズを維持）
+const INPUT_NEURON_RADIUS = 0.065   // 28×28 に合わせて縮小
 
 // 層ペアあたりのエッジ上限（隠れ層同士）
 const MAX_EDGES_PER_PAIR = 60
 
 // 入力層→隠れ層1 のエッジ上限
-const MAX_INPUT_EDGES = 250
+const MAX_INPUT_EDGES = 300
 const INPUT_EDGE_OPACITY = 0.18
 
 // 1層遷移あたりに表示するパーティクルの上限
